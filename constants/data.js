@@ -1,250 +1,167 @@
-import { defWebsites, defPreventContArr } from "../constants/data.js";
-
-import {
-	getPureURL,
-	setBadgeText,
-	setWebsites,
-	getWebsites,
-	getStorageData,
-	setStorageData,
-} from "../constants/functions.js";
-
-// handle install
-chrome.runtime.onInstalled.addListener(async details => {
-	const { previousVersion, reason } = details;
-	if (reason === "install") {
-		// check is extension already in use at other device
-		const { curAutoMode } = await getStorageData("curAutoMode");
-
-		if (curAutoMode == null) {
-			// set up start
-			await setStorageData({
-				ctxEnabled: true,
-				update: false,
-				stats: {
-					cleanedArea: 0,
-					numbOfItems: 0,
-					restored: 0,
-				},
-				statsEnabled: true,
-				restoreContActive: [...defPreventContArr],
-				curAutoMode: "whitelist",
-				staticSubMode: "relative",
-				shortCutMode: null,
-				websites1: {},
-				websites2: {},
-				websites3: {},
-			});
-
-			addCtxMenu();
-
-			chrome.tabs.create({ url: "https://popupoff.org/tutorial?source=chrome" })
-		}
-	} else if (reason === "update") {
-		try {
-			const { websites } = await getStorageData("websites");
-			if (previousVersion === "2.0.3") {
-				// 2.0.3
-			} else if (previousVersion === "2.0.2") {
-				// 2.0.2
-				chrome.storage.sync.remove(["autoModeAggr"]);
-			}
-		} catch (e) {
-			console.log("something went wrong");
-			console.log(e);
-		}
-	}
-});
-
-chrome.runtime.setUninstallURL("https://popupoff.org/why-delete?source=chrome")
-
-// handle tab switch(focus)
-chrome.tabs.onActivated.addListener(activeInfo => {
-	chrome.tabs.query({ active: true }, info => {
-		const url = info[0].url;
-		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
-			setBadgeText(null)(activeInfo.tabId);
-			chrome.action.disable(activeInfo.tabId);
-		} else {
-			const pureUrl = getPureURL(info[0]);
-			setNewBadge(pureUrl, activeInfo.tabId);
-		}
-	});
-});
-
-const letters = {
-	hardModeActive: "A",
-	easyModeActive: "M",
-	staticActive: "D",
-	whitelist: "",
-};
-
-const setNewBadge = async (pureUrl, tabID) => {
-	let { curAutoMode, ctxEnabled } = await getStorageData([
-		"ctxEnabled",
-		"curAutoMode",
-	]);
-	const websites = await getWebsites();
-
-	if (curAutoMode == null) {
-		await setStorageData({ curAutoMode: "whitelist" });
-		curAutoMode = "whitelist";
-	}
-
-	const fullWebsites = { ...defWebsites, ...websites };
-	let curModeName = curAutoMode;
-
-	if (pureUrl in fullWebsites)
-		curModeName = fullWebsites[pureUrl];
-
-	const letter = letters[curModeName];
-
-	setBadgeText(letter)(tabID);
-
-	if (ctxEnabled) {
-		Object.keys(subMenuStore).forEach(key => {
-			const menu = subMenuStore[key];
-
-			try {
-				chrome.contextMenus.update(menu, {
-					type: "checkbox",
-					checked:
-						letter === "A" && key === "hardModeActive" ||
-						letter === "D" && key === "staticActive" ||
-						letter === "M" && key === "easyModeActive" ||
-						letter === "" && key === "whitelist"
-				});
-			} catch (e) {
-				console.log("Couldn't update context menu");
-				console.log(e);
-			}
-		});
-	}
-};
-
-// handle mode changed from content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-	if (!sender.tab) return true;
-
-	if (request.modeChanged) {
-		const tabID = sender.tab.id;
-		const pureUrl = getPureURL(sender);
-
-		setNewBadge(pureUrl, tabID);
-	} else if (request.openOptPage) {
-		chrome.runtime.openOptionsPage();
-	} else if (request.ctxEnabled === true) {
-		addCtxMenu();
-	} else if (request.ctxEnabled === false) {
-		chrome.contextMenus.removeAll();
-	}
-
-	return true;
-});
-
-// handle updating to set new badge and context menu
-chrome.tabs.onUpdated.addListener((tabID, changeInfo, tab) => {
-	if (changeInfo.status === "loading") {
-		const url = tab.url;
-
-		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
-			setBadgeText(null)(tabID);
-			chrome.action.disable(tabID);
-		} else {
-			const pureUrl = getPureURL({ url });
-			setNewBadge(pureUrl, tabID);
-		}
-	}
-});
-
-// content menu (right click) mechanics
-const subMenu = [
-	{
-		title: `Aggressive`,
-		mode: "hardModeActive",
-	},
-	{
-		title: `Moderate`,
-		mode: "easyModeActive",
-	},
-	{
-		title: `Delicate`,
-		mode: "staticActive",
-	},
-	{
-		title: `Turn OFF`,
-		mode: "whitelist",
-	},
+// list of websites where prevent content feature enabled by default
+const defPreventContArr = [
+	"www.economist.com",
+	"www.reviewjournal.com",
+	"www.bostonglobe.com",
+	"www.theguardian.com",
+	"www.theladders.com",
 ];
 
-const subMenuStore = {
-	hardModeActive: null,
-	easyModeActive: null,
-	staticActive: null,
-	whitelist: null,
+// other default settings
+const defWebsites = {
+	"a.goodtime.io": "whitelist",
+	"about.google": "whitelist",
+	"app.hubspot.com": "whitelist",
+	"cal.mixmax.com": "whitelist",
+	"calendar.google.com": "whitelist",
+	"catalog.onliner.by": "whitelist",
+	"cloud.google.com": "whitelist",
+	"discord.com": "whitelist",
+	"docs.google.com": "whitelist",
+	"drive.google.com": "whitelist",
+	"e-dostavka.by": "whitelist",
+	"hangouts.google.com": "whitelist",
+	"mail.google.com": "whitelist",
+	"music.yandex.com": "whitelist",
+	"music.yandex.ru": "whitelist",
+	"music.youtube.com": "whitelist",
+	"open.spotify.com": "whitelist",
+	"romanisthere.github.io": "whitelist",
+	"support.google.com": "whitelist",
+	"trello.com": "whitelist",
+	"twitter.com": "whitelist",
+	"vk.com": "whitelist",
+	"vk.ru": "whitelist",
+	"web.telegram.org": "whitelist",
+	"www.amazon.co.uk": "whitelist",
+	"www.amazon.com": "whitelist",
+	"www.baidu.com": "whitelist",
+	"www.bing.com": "whitelist",
+	"www.facebook.com": "whitelist",
+	"www.google.com": "whitelist",
+	"www.inspera.com": "whitelist",
+	"www.instagram.com": "whitelist",
+	"www.linkedin.com": "whitelist",
+	"www.netflix.com": "whitelist",
+	"www.onliner.by": "whitelist",
+	"www.pinterest.com": "whitelist",
+	"www.reddit.com": "whitelist",
+	"www.spotify.com": "whitelist",
+	"www.walmart.com": "whitelist",
+	"www.youtube.com": "whitelist",
+	"zoom.us": "whitelist",
+	"store.steampowered.com": "whitelist",
+	"www.hackerrank.com": "whitelist",
+	"www.coursera.org": "whitelist",
+	"azure.microsoft.com": "whitelist",
+	"store.google.com": "whitelist",
+	"www.oneplus.com": "whitelist",
+	"smallpdf.com": "whitelist",
+	"www.upwork.com": "whitelist",
+	"www.docusign.com": "whitelist",
+	"account.docusign.com": "whitelist",
+	"go.docusign.com": "whitelist",
+	"app.docusign.com": "whitelist",
+	"app.hellosign.com": "whitelist",
+	"www.oysho.com": "whitelist",
+	"www.zara.com": "whitelist",
+	"www.nike.com": "whitelist",
+	"www.adidas.com": "whitelist",
+	"www.adidas.co.uk": "whitelist",
+	"www.reebok.co.uk": "whitelist",
+	"www.reebok.com": "whitelist",
+	"www.newbalance.com": "whitelist",
+	"www.newbalance.co.uk": "whitelist",
+	"eu.puma.com": "whitelist",
+	"us.puma.com": "whitelist",
+	"www.lacoste.com": "whitelist",
+	"www.armani.com": "whitelist",
+	"www.hugoboss.com": "whitelist",
+	"www.calvinklein.co.uk": "whitelist",
+	"www.calvinklein.de": "whitelist",
+	"www.victoriassecret.com": "whitelist",
+	"l.macys.com": "whitelist",
+	"www.jcpenney.com": "whitelist",
+	"www.dillards.com": "whitelist",
+	"oldnavy.gap.com": "whitelist",
+	"www.gap.co.uk": "whitelist",
+	"www.gap.com": "whitelist",
+	"www2.hm.com": "whitelist",
+	"www.hm.com": "whitelist",
+	"www.childrensplace.com": "whitelist",
+	"www.carters.com": "whitelist",
+	"www.zarahome.com": "whitelist",
+	"www.walmart.com": "whitelist",
+	"www.ebay.co.uk": "whitelist",
+	"www.ebay.com": "whitelist",
+	"www.target.com": "whitelist",
+	"www.bestbuy.com": "whitelist",
+	"www.costco.com": "whitelist",
+	"www.lowes.com": "whitelist",
+	"www.homedepot.com": "whitelist",
+	"www.walgreens.com": "whitelist",
+	"www.samsclub.com": "whitelist",
+	"www.kohls.com": "whitelist",
+	"www.ae.com": "whitelist",
+	"www.forever21.com": "whitelist",
+	"www.lasenza.com": "whitelist",
+	"www.bathandbodyworks.com": "whitelist",
+	"www.levi.com": "whitelist",
+	"eu.wrangler.com": "whitelist",
+	"www.wrangler.com": "whitelist",
+	"www.massimodutti.com": "whitelist",
+	"uk.tommy.com": "whitelist",
+	"www.pullandbear.com": "whitelist",
+	"shop.mango.com": "whitelist",
+	"www.c-and-a.com": "whitelist",
+	"www.bershka.com": "whitelist",
+	"www.stradivarius.com": "whitelist",
+	"www.guess.eu": "whitelist",
+	"www.guess.com": "whitelist",
+	"www.dolcegabbana.com": "whitelist",
+	"www.gucci.com": "whitelist",
+	"www.prada.com": "whitelist",
+	"www.louisvuitton.com": "whitelist",
+	"www.armaniexchange.com": "whitelist",
+	"www.dior.com": "whitelist",
+	"www.ralphlauren.co.uk": "whitelist",
+	"www.ralphlauren.com": "whitelist",
+	"www.samsung.com": "whitelist",
+	"www.huawei.com": "whitelist",
+	"consumer.huawei.com": "whitelist",
+	"www.motorola.com": "whitelist",
+	"www.motorola.co.uk": "whitelist",
+	"www.sony.net": "whitelist",
+	"www.panasonic.com": "whitelist",
+	"www.lenovo.com": "whitelist",
+	"www.siemens.com": "whitelist",
+	"www.bosch.com": "whitelist",
+	"www.sony.co.uk": "whitelist",
+	"www.sony.com": "whitelist",
+	"www.asus.com": "whitelist",
+	"www.mi.com": "whitelist",
+	"www.apple.com": "whitelist",
+	"www.lg.com": "whitelist",
+	"www.realme.com": "whitelist",
+	"www.vivo.com": "whitelist",
+	"lolesports.com": "whitelist",
+	"aliexpress.ru": "whitelist",
+	"www.aliexpress.com": "whitelist",
+	"whatsapp.com": "whitelist",
+	"www.twitch.tv": "whitelist",
+	"www.fandom.com": "whitelist",
+	"www.microsoft.com": "whitelist",
+	"localhost:4200": "whitelist",
+	"localhost:3000": "whitelist",
+	"localhost:8000": "whitelist",
+	"localhost:5000": "whitelist",
+	"localhost:8080": "whitelist",
+	// moderate by default
+	"www.economist.com": "easyModeActive",
+	"www.reviewjournal.com": "easyModeActive",
+	"www.bostonglobe.com": "easyModeActive",
+	"www.theguardian.com": "easyModeActive",
+	"www.theladders.com": "easyModeActive",
 };
 
-const setNewMode = async (newMode, pureUrl, tabID) => {
-	const websites = await getWebsites();
-
-	const fullWebsites = { ...defWebsites, ...websites };
-
-	if (pureUrl in fullWebsites && fullWebsites[pureUrl] === newMode) return;
-
-	const newWebsites = { ...websites, [pureUrl]: newMode };
-	const letter = letters[newMode];
-
-	try {
-		await setWebsites(newWebsites);
-		setBadgeText(letter)(tabID);
-	} catch (e) {
-		console.log("Couldn't update badge");
-		console.log(e);
-	}
-};
-
-const addCtxMenu = () => {
-	try {
-		chrome.contextMenus.removeAll(() => {
-			subMenu.map((item, index) => {
-				subMenuStore[Object.keys(subMenuStore)[index]] = chrome.contextMenus.create({
-					id: item.mode,
-					title: item.title,
-					type: "checkbox",
-					// checked whitelist by default
-					checked: item.mode === "whitelist",
-					// works for web pages only
-					documentUrlPatterns: ["http://*/*", "https://*/*", "http://*/", "https://*/"],
-				});
-			});
-		});
-
-		chrome.contextMenus.onClicked.addListener((info, tab) => {
-			const tabID = tab.id;
-			const tabURL = tab.url;
-			const pureUrl = getPureURL({ url: tabURL });
-
-			chrome.tabs.sendMessage(tabID, { activeMode: info.menuItemId }, resp => {
-				// if (resp && resp.closePopup === true) {
-				// 	chrome.tabs.update(tabID, { url: tabURL })
-				// }
-			});
-
-			setNewMode(info.menuItemId, pureUrl, tabID);
-		});
-	} catch (e) {
-		console.log("Couldn't create context menu");
-		console.log(e);
-	}
-}
-
-const initCtxMenu = async () => {
-	chrome.contextMenus.removeAll();
-	const { ctxEnabled } = await getStorageData("ctxEnabled");
-
-	if (ctxEnabled) {
-		addCtxMenu();
-	}
-}
-
-initCtxMenu();
+export { defWebsites, defPreventContArr };

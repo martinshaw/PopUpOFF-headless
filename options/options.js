@@ -1,250 +1,332 @@
-import { defWebsites, defPreventContArr } from "../constants/data.js";
-
 import {
-	getPureURL,
-	setBadgeText,
-	setWebsites,
-	getWebsites,
+	addClass,
 	getStorageData,
+	querySelector,
+	querySelectorAll,
+	removeClass,
 	setStorageData,
 } from "../constants/functions.js";
 
-// handle install
-chrome.runtime.onInstalled.addListener(async details => {
-	const { previousVersion, reason } = details;
-	if (reason === "install") {
-		// check is extension already in use at other device
-		const { curAutoMode } = await getStorageData("curAutoMode");
+import { defPreventContArr } from "../constants/data.js";
 
-		if (curAutoMode == null) {
-			// set up start
-			await setStorageData({
-				ctxEnabled: true,
-				update: false,
-				stats: {
-					cleanedArea: 0,
-					numbOfItems: 0,
-					restored: 0,
-				},
-				statsEnabled: true,
-				restoreContActive: [...defPreventContArr],
-				curAutoMode: "whitelist",
-				staticSubMode: "relative",
-				shortCutMode: null,
-				websites1: {},
-				websites2: {},
-				websites3: {},
-			});
+let state = {
+	stats: true,
+	ctxMenu: true,
+};
 
-			addCtxMenu();
-
-			chrome.tabs.create({ url: "https://popupoff.org/tutorial?source=chrome" })
-		}
-	} else if (reason === "update") {
-		try {
-			const { websites } = await getStorageData("websites");
-			if (previousVersion === "2.0.3") {
-				// 2.0.3
-			} else if (previousVersion === "2.0.2") {
-				// 2.0.2
-				chrome.storage.sync.remove(["autoModeAggr"]);
-			}
-		} catch (e) {
-			console.log("something went wrong");
-			console.log(e);
-		}
-	}
-});
-
-chrome.runtime.setUninstallURL("https://popupoff.org/why-delete?source=chrome")
-
-// handle tab switch(focus)
-chrome.tabs.onActivated.addListener(activeInfo => {
-	chrome.tabs.query({ active: true }, info => {
-		const url = info[0].url;
-		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
-			setBadgeText(null)(activeInfo.tabId);
-			chrome.action.disable(activeInfo.tabId);
-		} else {
-			const pureUrl = getPureURL(info[0]);
-			setNewBadge(pureUrl, activeInfo.tabId);
-		}
+// button checkmark -> cross animation
+querySelectorAll(".options__btn").forEach(btn => {
+	btn.addEventListener("click", function (e) {
+		e.preventDefault();
+		// cross/checkmark animation
+		this.classList.add("options__btn-activate");
+		setTimeout(() => {
+			this.classList.toggle("options__btn-active");
+		}, 300);
+		setTimeout(() => {
+			this.classList.remove("options__btn-activate");
+		}, 310);
 	});
 });
 
-const letters = {
-	hardModeActive: "A",
-	easyModeActive: "M",
-	staticActive: "D",
-	whitelist: "",
+// stats //
+const secondsToHms = l => {
+	const d = Number(l);
+	const h = Math.floor(d / 3600);
+	const m = Math.floor((d % 3600) / 60);
+	const s = Math.floor((d % 3600) % 60);
+
+	const hDisplay = h > 0 ? h + (h === 1 ? " hour, " : " hours, ") : "";
+	const mDisplay = m > 0 ? m + (m === 1 ? " minute, " : " minutes, ") : "";
+	const sDisplay = s > 0 ? s + (s === 1 ? " second" : " seconds") : "";
+
+	return hDisplay + mDisplay + sDisplay;
 };
 
-const setNewBadge = async (pureUrl, tabID) => {
-	let { curAutoMode, ctxEnabled } = await getStorageData([
-		"ctxEnabled",
-		"curAutoMode",
-	]);
-	const websites = await getWebsites();
+const initStats = async () => {
+	const statsBtn = querySelector(".stats");
+	const { statsEnabled, stats } = await getStorageData(["statsEnabled", "stats"]);
 
-	if (curAutoMode == null) {
-		await setStorageData({ curAutoMode: "whitelist" });
-		curAutoMode = "whitelist";
+	if (statsEnabled) {
+		const { cleanedArea, numbOfItems, restored } = stats;
+
+		addClass(statsBtn, "options__btn-active");
+		state = { ...state, stats: true };
+		querySelector(".statsCount").textContent = numbOfItems;
+		if (cleanedArea > 0) {
+			querySelector(".statsArea").textContent = parseFloat(parseFloat(cleanedArea).toFixed(1));
+			querySelector(".statsTime").textContent = secondsToHms(cleanedArea * .3);
+		}
+	} else {
+		removeClass(statsBtn, "options__btn-active");
+		state = { ...state, stats: false };
 	}
 
-	const fullWebsites = { ...defWebsites, ...websites };
-	let curModeName = curAutoMode;
+	statsBtn.addEventListener("click", async e => {
+		e.preventDefault();
+		if (!state.stats) {
+			await setStorageData({ statsEnabled: true });
+			removeClass(statsBtn, "options__btn-active");
+			state = { ...state, stats: true };
+		} else {
+			await setStorageData({ statsEnabled: false });
+			addClass(statsBtn, "options__btn-active");
+			state = { ...state, stats: false };
+		}
+	});
+};
 
-	if (pureUrl in fullWebsites)
-		curModeName = fullWebsites[pureUrl];
+// keyboard shortcut //
+const initKeyboard = async () => {
+	const inputs = querySelectorAll(".kbrd input");
+	const { shortCutMode } = await getStorageData("shortCutMode");
 
-	const letter = letters[curModeName];
+	if (shortCutMode)
+		querySelector(`.kbrd input[value=${shortCutMode}]`).checked = true;
 
-	setBadgeText(letter)(tabID);
+	inputs.forEach(elem => {
+		elem.addEventListener("change", async (e) => {
+			const mode = e.target.value === "null" ? null : e.target.value;
+			await setStorageData({ shortCutMode: mode });
+		})
+	});
+};
 
-	if (ctxEnabled) {
-		Object.keys(subMenuStore).forEach(key => {
-			const menu = subMenuStore[key];
+// autmode //
+const initAutoMode = async () => {
+	const inputs = querySelectorAll(".auto input");
+	const { curAutoMode } = await getStorageData("curAutoMode");
 
-			try {
-				chrome.contextMenus.update(menu, {
-					type: "checkbox",
-					checked:
-						letter === "A" && key === "hardModeActive" ||
-						letter === "D" && key === "staticActive" ||
-						letter === "M" && key === "easyModeActive" ||
-						letter === "" && key === "whitelist"
+	if (curAutoMode)
+		querySelector(`.auto input[value=${curAutoMode}]`).checked = true;
+
+	inputs.forEach(elem => {
+		elem.addEventListener("change", async (e) => {
+			const mode = e.target.value === "null" ? null : e.target.value;
+			await setStorageData({ curAutoMode: mode });
+		})
+	});
+};
+
+// resetting //
+const initReset = async () => {
+	// resetting //
+	const resetButtons = querySelectorAll(".options__button");
+	resetButtons.forEach(item =>
+		item.addEventListener("click", e => {
+			e.preventDefault();
+			const label = e.currentTarget.getAttribute("data-label");
+
+			if (label)
+				firePopUp(label);
+		})
+	);
+
+	const popup = querySelector(".popup");
+	const popupCloseBtn = querySelector(".notDelete");
+	const popupDeleteBtn = querySelector(".delete");
+
+	popupCloseBtn.addEventListener("click", e => {
+		e.preventDefault();
+
+		popupDeleteBtn.removeEventListener("click", resetStats);
+		popupDeleteBtn.removeEventListener("click", resetSettings);
+		popupDeleteBtn.removeEventListener("click", resetAll);
+
+		closePopUp();
+	});
+
+	const resetStats = async e => {
+		e.preventDefault();
+		await setStorageData({
+			stats: {
+				cleanedArea: 0,
+				numbOfItems: 0,
+				restored: 0,
+			},
+		});
+		window.location.reload();
+	};
+
+	const resetSettings = async e => {
+		e.preventDefault();
+		await setStorageData({
+			update: false,
+			statsEnabled: true,
+			backupData: {},
+			curAutoMode: "whitelist",
+			shortCutMode: null,
+		});
+		window.location.reload();
+	};
+
+	const resetAll = async e => {
+		e.preventDefault();
+		await setStorageData({
+			update: false,
+			stats: {
+				cleanedArea: 0,
+				numbOfItems: 0,
+				restored: 0,
+			},
+			statsEnabled: true,
+			backupData: {},
+			restoreContActive: [...defPreventContArr],
+			curAutoMode: "whitelist",
+			shortCutMode: null,
+			websites1: {},
+			websites2: {},
+			websites3: {},
+		});
+		window.location.reload();
+	};
+
+	const closePopUp = () => removeClass(popup, "popup-show");
+
+	const firePopUp = label => {
+		addClass(popup, "popup-show");
+
+		if (label === "stats") popupDeleteBtn.addEventListener("click", resetStats);
+		else if (label === "settings")
+			popupDeleteBtn.addEventListener("click", resetSettings);
+		else if (label === "all") popupDeleteBtn.addEventListener("click", resetAll);
+	};
+};
+
+const initDelicate = async () => {
+	const inputs = querySelectorAll(".delicate input");
+	const { staticSubMode } = await getStorageData("staticSubMode");
+
+	if (staticSubMode === "absolute")
+		querySelector(`.delicate #absolute`).checked = true;
+	else if (staticSubMode === "static")
+		querySelector(`.delicate #static`).checked = true;
+
+	inputs.forEach(elem => {
+		elem.addEventListener("change", async (e) => {
+			await setStorageData({ staticSubMode: e.target.value });
+		})
+	});
+};
+
+const initExportSettings = () => {
+	const initExport = async () => {
+		const data = await getStorageData(null);
+		const compressed = JSON.stringify(data);
+		const url = 'data:application/json;base64,' + btoa(compressed);
+
+		chrome.downloads.download({
+			url: url,
+			filename: 'PopUpOFF_settings.json'
+		});
+	}
+
+	const exportSettings = async () => {
+		chrome.permissions.contains({
+			permissions: ["downloads"],
+		}, (result) => {
+			if (result) {
+				initExport();
+			} else {
+				chrome.permissions.request({
+					permissions: ["downloads"],
+				}, (granted) => {
+					// The callback argument will be true if the user granted the permissions.
+					if (granted) {
+						initExport();
+					} else {
+						alert("You can't export (download) settings without giving permissions first");
+					}
 				});
-			} catch (e) {
-				console.log("Couldn't update context menu");
-				console.log(e);
 			}
 		});
+
 	}
+
+	querySelector(".exportBtn").addEventListener("click", async e => {
+		e.preventDefault();
+		await exportSettings();
+	});
+
+	// init import
+	const input = querySelector(".importInput");
+
+	const importJson = async (e) => {
+		const file = input.files[0];
+		const reader = new FileReader();
+
+		reader.readAsText(file);
+
+		reader.onload = async () => {
+			const data = JSON.parse(reader.result);
+			await setStorageData(data);
+			alert("Success! Update this page to see the changes.");
+
+			input.value = '';
+		};
+
+		reader.onerror = () => {
+			console.log(reader.error);
+			alert("Couldn't read the file. Contact RomanistHere@pm.me for help");
+
+			input.value = '';
+		};
+	};
+
+	input.addEventListener("change", importJson, false);
+
+	querySelector(".importBtn").addEventListener("click", async e => {
+		e.preventDefault();
+		input.click();
+	});
 };
-
-// handle mode changed from content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-	if (!sender.tab) return true;
-
-	if (request.modeChanged) {
-		const tabID = sender.tab.id;
-		const pureUrl = getPureURL(sender);
-
-		setNewBadge(pureUrl, tabID);
-	} else if (request.openOptPage) {
-		chrome.runtime.openOptionsPage();
-	} else if (request.ctxEnabled === true) {
-		addCtxMenu();
-	} else if (request.ctxEnabled === false) {
-		chrome.contextMenus.removeAll();
-	}
-
-	return true;
-});
-
-// handle updating to set new badge and context menu
-chrome.tabs.onUpdated.addListener((tabID, changeInfo, tab) => {
-	if (changeInfo.status === "loading") {
-		const url = tab.url;
-
-		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
-			setBadgeText(null)(tabID);
-			chrome.action.disable(tabID);
-		} else {
-			const pureUrl = getPureURL({ url });
-			setNewBadge(pureUrl, tabID);
-		}
-	}
-});
-
-// content menu (right click) mechanics
-const subMenu = [
-	{
-		title: `Aggressive`,
-		mode: "hardModeActive",
-	},
-	{
-		title: `Moderate`,
-		mode: "easyModeActive",
-	},
-	{
-		title: `Delicate`,
-		mode: "staticActive",
-	},
-	{
-		title: `Turn OFF`,
-		mode: "whitelist",
-	},
-];
-
-const subMenuStore = {
-	hardModeActive: null,
-	easyModeActive: null,
-	staticActive: null,
-	whitelist: null,
-};
-
-const setNewMode = async (newMode, pureUrl, tabID) => {
-	const websites = await getWebsites();
-
-	const fullWebsites = { ...defWebsites, ...websites };
-
-	if (pureUrl in fullWebsites && fullWebsites[pureUrl] === newMode) return;
-
-	const newWebsites = { ...websites, [pureUrl]: newMode };
-	const letter = letters[newMode];
-
-	try {
-		await setWebsites(newWebsites);
-		setBadgeText(letter)(tabID);
-	} catch (e) {
-		console.log("Couldn't update badge");
-		console.log(e);
-	}
-};
-
-const addCtxMenu = () => {
-	try {
-		chrome.contextMenus.removeAll(() => {
-			subMenu.map((item, index) => {
-				subMenuStore[Object.keys(subMenuStore)[index]] = chrome.contextMenus.create({
-					id: item.mode,
-					title: item.title,
-					type: "checkbox",
-					// checked whitelist by default
-					checked: item.mode === "whitelist",
-					// works for web pages only
-					documentUrlPatterns: ["http://*/*", "https://*/*", "http://*/", "https://*/"],
-				});
-			});
-		});
-
-		chrome.contextMenus.onClicked.addListener((info, tab) => {
-			const tabID = tab.id;
-			const tabURL = tab.url;
-			const pureUrl = getPureURL({ url: tabURL });
-
-			chrome.tabs.sendMessage(tabID, { activeMode: info.menuItemId }, resp => {
-				// if (resp && resp.closePopup === true) {
-				// 	chrome.tabs.update(tabID, { url: tabURL })
-				// }
-			});
-
-			setNewMode(info.menuItemId, pureUrl, tabID);
-		});
-	} catch (e) {
-		console.log("Couldn't create context menu");
-		console.log(e);
-	}
-}
 
 const initCtxMenu = async () => {
-	chrome.contextMenus.removeAll();
+	const ctxBtn = querySelector(".ctxMenu");
 	const { ctxEnabled } = await getStorageData("ctxEnabled");
 
 	if (ctxEnabled) {
-		addCtxMenu();
+		addClass(ctxBtn, "options__btn-active");
+		state = { ...state, ctxMenu: true };
+	} else {
+		removeClass(ctxBtn, "options__btn-active");
+		state = { ...state, ctxMenu: false };
 	}
+
+	ctxBtn.addEventListener("click", async e => {
+		e.preventDefault();
+		if (!state.ctxMenu) {
+			chrome.runtime.sendMessage({ ctxEnabled: true });
+			await setStorageData({ ctxEnabled: true });
+			removeClass(ctxBtn, "options__btn-active");
+			state = { ...state, ctxMenu: true };
+		} else {
+			chrome.runtime.sendMessage({ ctxEnabled: false });
+			await setStorageData({ ctxEnabled: false });
+			addClass(ctxBtn, "options__btn-active");
+			state = { ...state, ctxMenu: false };
+		}
+	});
+};
+
+const initDonation = async () => {
+	querySelector(".donationImage").src = chrome.runtime.getURL("/images/stop_ads.png");
+
+	const { optBannerClicked } = await getStorageData(["optBannerClicked"]);
+	if (!optBannerClicked) {
+		removeClass(querySelector(".donation"), "hidden");
+	}
+
+	querySelectorAll(".donation__btns a").forEach(elem => elem.addEventListener("click", async () => {
+		await setStorageData({ optBannerClicked: true });
+	}));
 }
 
+initDonation();
+initStats();
+initKeyboard();
+initAutoMode();
+initReset();
+initDelicate();
+initExportSettings();
 initCtxMenu();
