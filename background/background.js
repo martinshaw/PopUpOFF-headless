@@ -56,8 +56,6 @@ chrome.runtime.onInstalled.addListener(async details => {
 	}
 });
 
-chrome.runtime.setUninstallURL("https://popupoff.org/why-delete?source=chrome")
-
 // handle tab switch(focus)
 chrome.tabs.onActivated.addListener(activeInfo => {
 	chrome.tabs.query({ active: true }, info => {
