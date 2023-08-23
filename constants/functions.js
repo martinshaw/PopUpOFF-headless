@@ -8,7 +8,7 @@ const config = {
     },
     "statsEnabled": true,
     "restoreContActive": [],
-    "curAutoMode": "whitelist",
+    "curAutoMode": "easyModeActive",
     "staticSubMode": "relative",
     "shortCutMode": null,
 	"curMode": "easyModeActive",
