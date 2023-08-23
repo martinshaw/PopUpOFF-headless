@@ -1,4 +1,51 @@
-# PopUpOFF BROWSER EXTENSION
+# PopUpOFF-headless
+
+This is a fork of [PopUpOFF](http://popupoff.org) chrome extension modified for non-interactive headless use with a browser automation tool like [puppeteer](https://developer.chrome.com/docs/puppeteer/).
+
+Except for changes which remove the user interface and which facilitate serialised configuration, the code is entirely unchanged from the original extension package authored by [RomanistHere](https://twitter.com/RomanistHere).
+
+If you enjoy my fork and have found a valuable use for it, please consider donating to the original author [here](https://popupoff.org/#donate).
+
+## Notice about Versions
+
+I would like to keep the semantic versioning of this fork in sync with the original extension package, but I have no way of knowing when the original author will release a new version.
+
+For now, while the package number is <1.0.0, *this package is not ready for stable production use and should be considered experimental*.
+
+## Installation
+
+```bash
+yarn add popupoff-headless
+```
+ or 
+```bash
+npm install popupoff-headless --add
+```
+
+## Usage
+
+```javascript
+const puppeteer = require('puppeteer');
+const path = require('path');
+
+const extensionFileNames = [
+  path.join(__dirname, 'node_modules/popupoff-headless'),
+]
+
+const listOfExtensionfileNames = extensionFileNames.join(',')
+
+const browser = await puppeteer.launch({
+  headless: false,
+  args: [
+    `--disable-extensions-except=${listOfExtensionfileNames}`,
+    `--load-extension=${listOfExtensionfileNames}`,
+  ],
+})
+
+const page = await browser.newPage()
+```
+
+# Original README file 
 
 - Download for:
   - [Chrome / Chromium](https://chrome.google.com/webstore/detail/popupoff-popup-blocker/ifnkdbpmgkdbfklnbfidaackdenlmhgh)

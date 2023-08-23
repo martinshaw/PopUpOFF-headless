@@ -1,17 +1,13 @@
 {
   "name": "popupoff-headless",
-  "version": "1.0.0",
-  "description": "- Download for:   - [Chrome / Chromium](https://chrome.google.com/webstore/detail/popupoff-popup-blocker/ifnkdbpmgkdbfklnbfidaackdenlmhgh)   - [Firefox](https://addons.mozilla.org/en-GB/firefox/addon/popupoff/)   - [Opera](https://addons.opera.com/en-gb/extensions/details/popupoff-popup-and-overlay-blocker/)   - [Edge](https://microsoftedge.microsoft.com/addons/detail/popupoff-popup-and-over/elacdkdmimelpnkbccdanmnabhajdccm) - [Website](http://popupoff.org/) - [Twitter](https://twitter.com/RomanistHere) - [Support project / Donate](https://popupoff.org/#donate)",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "version": "2.1.3",
+  "description": "A headless version of the PopUpOFF chrome extension for use with Puppeteer",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/martinshaw/PopUpOFF-headless.git"
   },
   "author": "RomanistHere <RomanistHere@pm.me>, Martin Shaw <hello@martinshaw.co>",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/martinshaw/PopUpOFF-headless/issues"
   },
