@@ -15,18 +15,7 @@ chrome.runtime.onInstalled.addListener(async details => {
 	if (reason === "install") {
 		//
 	} else if (reason === "update") {
-		try {
-			const { websites } = await getStorageData("websites");
-			if (previousVersion === "2.0.3") {
-				// 2.0.3
-			} else if (previousVersion === "2.0.2") {
-				// 2.0.2
-				chrome.storage.sync.remove(["autoModeAggr"]);
-			}
-		} catch (e) {
-			console.log("something went wrong");
-			console.log(e);
-		}
+		//
 	}
 });
 
