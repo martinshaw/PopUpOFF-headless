@@ -1,305 +1,250 @@
-const getInitialState = statsEnabled => {
-	return statsEnabled
-		? {
-				windowArea: parseFloat(window.innerHeight * window.innerWidth),
-				cleanedArea: 0,
-				numbOfItems: 0,
-				restored: 0,
-		  }
-		: {
-				windowArea: parseFloat(window.innerHeight * window.innerWidth),
-		  };
-};
+import { defWebsites, defPreventContArr } from "../constants/data.js";
 
-const hardMode = ({ statsEnabled, shouldRestoreCont }) => {
-	// state
-	let state = getInitialState(statsEnabled);
+import {
+	getPureURL,
+	setBadgeText,
+	setWebsites,
+	getWebsites,
+	getStorageData,
+	setStorageData,
+} from "../constants/functions.js";
 
-	// unmutable
-	const doc = document.documentElement;
-	const body = document.body;
-	const elems = body.getElementsByTagName("*");
+// handle install
+chrome.runtime.onInstalled.addListener(async details => {
+	const { previousVersion, reason } = details;
+	if (reason === "install") {
+		// check is extension already in use at other device
+		const { curAutoMode } = await getStorageData("curAutoMode");
 
-	// methods
-	const checkElem = element => {
-		if (!isDecentElem(element))
-			return;
-
-		const elemPosStyle = getStyle(element, "position");
-		if (elemPosStyle === "fixed" || elemPosStyle === "sticky") {
-			const isFixed = checkToConvertToStatic({ elem: element });
-			if (isFixed)
-				return;
-
-			if (element.getAttribute("data-popupoff") === "notification")
-				return;
-
-			if (getStyle(element, "display") !== "none")
-				element.setAttribute("data-popupoff", "bl");
-
-			if (statsEnabled) state = addItemToStats(element, state);
-
-			setPropImp(element, "display", "none");
-		}
-
-		state = additionalChecks(element, state, statsEnabled, shouldRestoreCont, checkElem);
-	};
-
-	// watch DOM
-	const prevLoop = () => {
-		if (infiniteLoopPreventCounter > 1600) {
-			wasNotStoped = removeDomWatcher(domObserver, wasNotStoped, body, action);
-			return true;
-		}
-		infiniteLoopPreventCounter++;
-		if (myTimer === 0) {
-			myTimer = setTimeout(() => {
-				infiniteLoopPreventCounter = 0;
-				clearTimeout(myTimer);
-				myTimer = 0;
-			}, 1000);
-		}
-		return false;
-	};
-
-	const watchDOM = () => {
-		if (!domObserver) {
-			domObserver = new MutationObserver(mutations => {
-				state = watchMutations(
-					mutations,
-					shouldRestoreCont,
-					statsEnabled,
-					state,
-					doc,
-					body,
-					prevLoop,
-					checkElem
-				);
+		if (curAutoMode == null) {
+			// set up start
+			await setStorageData({
+				ctxEnabled: true,
+				update: false,
+				stats: {
+					cleanedArea: 0,
+					numbOfItems: 0,
+					restored: 0,
+				},
+				statsEnabled: true,
+				restoreContActive: [...defPreventContArr],
+				curAutoMode: "whitelist",
+				staticSubMode: "relative",
+				shortCutMode: null,
+				websites1: {},
+				websites2: {},
+				websites3: {},
 			});
+
+			addCtxMenu();
+
+			chrome.tabs.create({ url: "https://popupoff.org/tutorial?source=chrome" })
 		}
-
-		domObserver.observe(doc, {
-			childList: true,
-			subtree: true,
-			attributes: true,
-		});
-	};
-
-	const action = elems => {
-		state = removeOverflow(statsEnabled, state, doc, body);
-		checkElems(elems, checkElem);
-		removeListeners();
-		if (shouldRestoreCont) state = findHidden(state, statsEnabled, doc);
-		watchDOM();
-	};
-
-	// Let the hunt begin!
-	action(elems);
-	// statistics
-	if (statsEnabled) {
-		setNewData(state);
-		if (!beforeUnloadAactive) {
-			window.addEventListener("beforeunload", () => {
-				setNewData(state);
-			});
-			beforeUnloadAactive = true;
-		}
-	}
-};
-
-const easyMode = ({ statsEnabled, shouldRestoreCont, positionCheck }) => {
-	// state
-	let state = getInitialState(statsEnabled);
-	// unmutable
-	const doc = document.documentElement;
-	const body = document.body;
-	const elems = body.getElementsByTagName("*");
-	const memoize = new WeakMap();
-
-	const checkElem = element => {
-		if (!isDecentElem(element))
-			return;
-
-		const elemPosStyle = getStyle(element, "position");
-		if (elemPosStyle === "fixed" || elemPosStyle === "sticky") {
-			const isFixed = checkToConvertToStatic({ elem: element });
-			if (isFixed)
-				return;
-
-			if (element.getAttribute("data-popupoff") === "notification")
-				return;
-
-			const memoized = memoize.has(element);
-			const { shouldRemove, shouldMemo } = memoized
-				? { shouldRemove: memoize.get(element), shouldMemo: false }
-				: positionCheck(element, state.windowArea);
-
-			if (shouldRemove) {
-				if (statsEnabled)
-					state = addItemToStats(element, state);
-
-				if (getStyle(element, "display") !== "none")
-					element.setAttribute("data-popupoff", "bl");
-
-				setPropImp(element, "display", "none");
+	} else if (reason === "update") {
+		try {
+			const { websites } = await getStorageData("websites");
+			if (previousVersion === "2.0.3") {
+				// 2.0.3
+			} else if (previousVersion === "2.0.2") {
+				// 2.0.2
+				chrome.storage.sync.remove(["autoModeAggr"]);
 			}
-
-			if (!memoized && shouldMemo)
-				memoize.set(element, shouldRemove);
+		} catch (e) {
+			console.log("something went wrong");
+			console.log(e);
 		}
+	}
+});
 
-		state = additionalChecks(element, state, statsEnabled, shouldRestoreCont, checkElem);
-	};
-	// watch DOM
-	const prevLoop = () => {
-		if (infiniteLoopPreventCounter > 1200) {
-			wasNotStoped = removeDomWatcher(domObserver, wasNotStoped, body, action);
-			return true;
-		}
-		infiniteLoopPreventCounter++;
-		if (myTimer === 0) {
-			myTimer = setTimeout(() => {
-				infiniteLoopPreventCounter = 0;
-				clearTimeout(myTimer);
-				myTimer = 0;
-			}, 1000);
-		}
-		return false;
-	};
+chrome.runtime.setUninstallURL("https://popupoff.org/why-delete?source=chrome")
 
-	const watchDOM = () => {
-		if (!domObserver) {
-			domObserver = new MutationObserver(mutations => {
-				state = watchMutations(
-					mutations,
-					shouldRestoreCont,
-					statsEnabled,
-					state,
-					doc,
-					body,
-					prevLoop,
-					checkElem,
-					memoize
-				);
-			});
+// handle tab switch(focus)
+chrome.tabs.onActivated.addListener(activeInfo => {
+	chrome.tabs.query({ active: true }, info => {
+		const url = info[0].url;
+		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
+			setBadgeText(null)(activeInfo.tabId);
+			chrome.action.disable(activeInfo.tabId);
+		} else {
+			const pureUrl = getPureURL(info[0]);
+			setNewBadge(pureUrl, activeInfo.tabId);
 		}
+	});
+});
 
-		domObserver.observe(doc, {
-			childList: true,
-			subtree: true,
-			attributes: true,
+const letters = {
+	hardModeActive: "A",
+	easyModeActive: "M",
+	staticActive: "D",
+	whitelist: "",
+};
+
+const setNewBadge = async (pureUrl, tabID) => {
+	let { curAutoMode, ctxEnabled } = await getStorageData([
+		"ctxEnabled",
+		"curAutoMode",
+	]);
+	const websites = await getWebsites();
+
+	if (curAutoMode == null) {
+		await setStorageData({ curAutoMode: "whitelist" });
+		curAutoMode = "whitelist";
+	}
+
+	const fullWebsites = { ...defWebsites, ...websites };
+	let curModeName = curAutoMode;
+
+	if (pureUrl in fullWebsites)
+		curModeName = fullWebsites[pureUrl];
+
+	const letter = letters[curModeName];
+
+	setBadgeText(letter)(tabID);
+
+	if (ctxEnabled) {
+		Object.keys(subMenuStore).forEach(key => {
+			const menu = subMenuStore[key];
+
+			try {
+				chrome.contextMenus.update(menu, {
+					type: "checkbox",
+					checked:
+						letter === "A" && key === "hardModeActive" ||
+						letter === "D" && key === "staticActive" ||
+						letter === "M" && key === "easyModeActive" ||
+						letter === "" && key === "whitelist"
+				});
+			} catch (e) {
+				console.log("Couldn't update context menu");
+				console.log(e);
+			}
 		});
-	};
-
-	const action = elems => {
-		state = removeOverflow(statsEnabled, state, doc, body);
-		checkElems(elems, checkElem);
-		removeListeners();
-		if (shouldRestoreCont) state = findHidden(state, statsEnabled, doc);
-		watchDOM();
-	};
-
-	// Let the hunt begin!
-	action(elems);
-	// statistics
-	if (statsEnabled) {
-		setNewData(state);
-		if (!beforeUnloadAactive) {
-			window.addEventListener("beforeunload", () => {
-				setNewData(state);
-			});
-			beforeUnloadAactive = true;
-		}
 	}
 };
 
-const staticMode = ({ statsEnabled, shouldRestoreCont, staticSubMode }) => {
-	// state
-	let state = getInitialState(statsEnabled);
+// handle mode changed from content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+	if (!sender.tab) return true;
 
-	// unmutable
-	const doc = document.documentElement;
-	const body = document.body;
-	const elems = body.getElementsByTagName("*");
+	if (request.modeChanged) {
+		const tabID = sender.tab.id;
+		const pureUrl = getPureURL(sender);
 
-	// methods
-	const checkElem = element => {
-		if (!isDecentElem(element))
-			return;
+		setNewBadge(pureUrl, tabID);
+	} else if (request.openOptPage) {
+		chrome.runtime.openOptionsPage();
+	} else if (request.ctxEnabled === true) {
+		addCtxMenu();
+	} else if (request.ctxEnabled === false) {
+		chrome.contextMenus.removeAll();
+	}
 
-		const elemPosStyle = getStyle(element, "position");
+	return true;
+});
 
-		if (elemPosStyle === "fixed" || elemPosStyle === "sticky") {
-			if (element.getAttribute("data-popupoff") === "notification")
-				return;
+// handle updating to set new badge and context menu
+chrome.tabs.onUpdated.addListener((tabID, changeInfo, tab) => {
+	if (changeInfo.status === "loading") {
+		const url = tab.url;
 
-			if (getStyle(element, "display") !== "none")
-				element.setAttribute("data-popupoff", "st");
-
-			if (statsEnabled) state = addItemToStats(element, state);
-
-			setPropImp(element, "position", staticSubMode || "relative");
-		}
-	};
-
-	// watch DOM
-	const prevLoop = () => {
-		if (infiniteLoopPreventCounter > 1500) {
-			wasNotStoped = removeDomWatcher(domObserver, wasNotStoped, body, action);
-			return true;
-		}
-		infiniteLoopPreventCounter++;
-		if (myTimer === 0) {
-			myTimer = setTimeout(() => {
-				infiniteLoopPreventCounter = 0;
-				clearTimeout(myTimer);
-				myTimer = 0;
-			}, 1000);
-		}
-		return false;
-	};
-
-	const watchDOM = () => {
-		if (!domObserver) {
-			domObserver = new MutationObserver(mutations => {
-				state = watchMutations(
-					mutations,
-					shouldRestoreCont,
-					statsEnabled,
-					state,
-					doc,
-					body,
-					prevLoop,
-					checkElem
-				);
-			});
-		}
-
-		domObserver.observe(doc, {
-			childList: true,
-			subtree: true,
-			attributes: true,
-		});
-	};
-
-	const action = elems => {
-		state = removeOverflow(statsEnabled, state, doc, body);
-		checkElems(elems, checkElem);
-		removeListeners();
-		if (shouldRestoreCont) state = findHidden(state, statsEnabled, doc);
-		watchDOM();
-	};
-
-	// Let the hunt begin!
-	action(elems);
-	// statistics
-	if (statsEnabled) {
-		setNewData(state);
-		if (!beforeUnloadAactive) {
-			window.addEventListener("beforeunload", () => {
-				setNewData(state);
-			});
-			beforeUnloadAactive = true;
+		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
+			setBadgeText(null)(tabID);
+			chrome.action.disable(tabID);
+		} else {
+			const pureUrl = getPureURL({ url });
+			setNewBadge(pureUrl, tabID);
 		}
 	}
+});
+
+// content menu (right click) mechanics
+const subMenu = [
+	{
+		title: `Aggressive`,
+		mode: "hardModeActive",
+	},
+	{
+		title: `Moderate`,
+		mode: "easyModeActive",
+	},
+	{
+		title: `Delicate`,
+		mode: "staticActive",
+	},
+	{
+		title: `Turn OFF`,
+		mode: "whitelist",
+	},
+];
+
+const subMenuStore = {
+	hardModeActive: null,
+	easyModeActive: null,
+	staticActive: null,
+	whitelist: null,
 };
+
+const setNewMode = async (newMode, pureUrl, tabID) => {
+	const websites = await getWebsites();
+
+	const fullWebsites = { ...defWebsites, ...websites };
+
+	if (pureUrl in fullWebsites && fullWebsites[pureUrl] === newMode) return;
+
+	const newWebsites = { ...websites, [pureUrl]: newMode };
+	const letter = letters[newMode];
+
+	try {
+		await setWebsites(newWebsites);
+		setBadgeText(letter)(tabID);
+	} catch (e) {
+		console.log("Couldn't update badge");
+		console.log(e);
+	}
+};
+
+const addCtxMenu = () => {
+	try {
+		chrome.contextMenus.removeAll(() => {
+			subMenu.map((item, index) => {
+				subMenuStore[Object.keys(subMenuStore)[index]] = chrome.contextMenus.create({
+					id: item.mode,
+					title: item.title,
+					type: "checkbox",
+					// checked whitelist by default
+					checked: item.mode === "whitelist",
+					// works for web pages only
+					documentUrlPatterns: ["http://*/*", "https://*/*", "http://*/", "https://*/"],
+				});
+			});
+		});
+
+		chrome.contextMenus.onClicked.addListener((info, tab) => {
+			const tabID = tab.id;
+			const tabURL = tab.url;
+			const pureUrl = getPureURL({ url: tabURL });
+
+			chrome.tabs.sendMessage(tabID, { activeMode: info.menuItemId }, resp => {
+				// if (resp && resp.closePopup === true) {
+				// 	chrome.tabs.update(tabID, { url: tabURL })
+				// }
+			});
+
+			setNewMode(info.menuItemId, pureUrl, tabID);
+		});
+	} catch (e) {
+		console.log("Couldn't create context menu");
+		console.log(e);
+	}
+}
+
+const initCtxMenu = async () => {
+	chrome.contextMenus.removeAll();
+	const { ctxEnabled } = await getStorageData("ctxEnabled");
+
+	if (ctxEnabled) {
+		addCtxMenu();
+	}
+}
+
+initCtxMenu();

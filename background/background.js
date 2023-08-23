@@ -13,11 +13,50 @@ import {
 chrome.runtime.onInstalled.addListener(async details => {
 	const { previousVersion, reason } = details;
 	if (reason === "install") {
-		//
+		// check is extension already in use at other device
+		const { curAutoMode } = await getStorageData("curAutoMode");
+
+		if (curAutoMode == null) {
+			// set up start
+			await setStorageData({
+				ctxEnabled: true,
+				update: false,
+				stats: {
+					cleanedArea: 0,
+					numbOfItems: 0,
+					restored: 0,
+				},
+				statsEnabled: true,
+				restoreContActive: [...defPreventContArr],
+				curAutoMode: "whitelist",
+				staticSubMode: "relative",
+				shortCutMode: null,
+				websites1: {},
+				websites2: {},
+				websites3: {},
+			});
+
+			addCtxMenu();
+
+			chrome.tabs.create({ url: "https://popupoff.org/tutorial?source=chrome" })
+		}
 	} else if (reason === "update") {
-		//
+		try {
+			const { websites } = await getStorageData("websites");
+			if (previousVersion === "2.0.3") {
+				// 2.0.3
+			} else if (previousVersion === "2.0.2") {
+				// 2.0.2
+				chrome.storage.sync.remove(["autoModeAggr"]);
+			}
+		} catch (e) {
+			console.log("something went wrong");
+			console.log(e);
+		}
 	}
 });
+
+chrome.runtime.setUninstallURL("https://popupoff.org/why-delete?source=chrome")
 
 // handle tab switch(focus)
 chrome.tabs.onActivated.addListener(activeInfo => {

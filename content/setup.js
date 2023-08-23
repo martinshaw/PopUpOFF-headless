@@ -1,186 +1,250 @@
-let appState = {
-	curMode: null,
+import { defWebsites, defPreventContArr } from "../constants/data.js";
+
+import {
+	getPureURL,
+	setBadgeText,
+	setWebsites,
+	getWebsites,
+	getStorageData,
+	setStorageData,
+} from "../constants/functions.js";
+
+// handle install
+chrome.runtime.onInstalled.addListener(async details => {
+	const { previousVersion, reason } = details;
+	if (reason === "install") {
+		// check is extension already in use at other device
+		const { curAutoMode } = await getStorageData("curAutoMode");
+
+		if (curAutoMode == null) {
+			// set up start
+			await setStorageData({
+				ctxEnabled: true,
+				update: false,
+				stats: {
+					cleanedArea: 0,
+					numbOfItems: 0,
+					restored: 0,
+				},
+				statsEnabled: true,
+				restoreContActive: [...defPreventContArr],
+				curAutoMode: "whitelist",
+				staticSubMode: "relative",
+				shortCutMode: null,
+				websites1: {},
+				websites2: {},
+				websites3: {},
+			});
+
+			addCtxMenu();
+
+			chrome.tabs.create({ url: "https://popupoff.org/tutorial?source=chrome" })
+		}
+	} else if (reason === "update") {
+		try {
+			const { websites } = await getStorageData("websites");
+			if (previousVersion === "2.0.3") {
+				// 2.0.3
+			} else if (previousVersion === "2.0.2") {
+				// 2.0.2
+				chrome.storage.sync.remove(["autoModeAggr"]);
+			}
+		} catch (e) {
+			console.log("something went wrong");
+			console.log(e);
+		}
+	}
+});
+
+chrome.runtime.setUninstallURL("https://popupoff.org/why-delete?source=chrome")
+
+// handle tab switch(focus)
+chrome.tabs.onActivated.addListener(activeInfo => {
+	chrome.tabs.query({ active: true }, info => {
+		const url = info[0].url;
+		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
+			setBadgeText(null)(activeInfo.tabId);
+			chrome.action.disable(activeInfo.tabId);
+		} else {
+			const pureUrl = getPureURL(info[0]);
+			setNewBadge(pureUrl, activeInfo.tabId);
+		}
+	});
+});
+
+const letters = {
+	hardModeActive: "A",
+	easyModeActive: "M",
+	staticActive: "D",
+	whitelist: "",
 };
 
-const modes = {
-	whitelist: (obj) => null,
-	hardModeActive: (obj) => hardMode(obj),
-	easyModeActive: (obj) => easyMode({ ...obj, positionCheck: positionCheckTypeI }),
-	staticActive: (obj) => staticMode(obj),
-};
-
-const startMode = ({ curModeName, statsEnabled, shouldRestoreCont, staticSubMode }) => {
-	// check if we switch from hard to easy one
-	if (appState.curMode === "hardModeActive" || appState.curMode === "easyModeActive" || appState.curMode === "staticActive")
-		restoreFixedElems();
-
-	// start new mode and upd state
-	const mode = modes[curModeName];
-	appState = { ...appState, curMode: curModeName };
-	mode({ statsEnabled, shouldRestoreCont, staticSubMode });
-};
-
-// initialize mode
-const initMode = async () => {
-	let { statsEnabled, restoreContActive, curAutoMode, staticSubMode } = await getStorageData([
-		"statsEnabled",
-		"restoreContActive",
+const setNewBadge = async (pureUrl, tabID) => {
+	let { curAutoMode, ctxEnabled } = await getStorageData([
+		"ctxEnabled",
 		"curAutoMode",
-		"staticSubMode",
 	]);
 	const websites = await getWebsites();
-	// check if script is inside the iframe
-	if (window !== window.parent) return;
 
-	if (restoreContActive == null) {
-		await setStorageData({ restoreContActive: [] });
-		restoreContActive = [];
-	}
-
-	if (statsEnabled == null) {
-		await setStorageData({ statsEnabled: false });
-		statsEnabled = false;
+	if (curAutoMode == null) {
+		await setStorageData({ curAutoMode: "whitelist" });
+		curAutoMode = "whitelist";
 	}
 
 	const fullWebsites = { ...defWebsites, ...websites };
-	const pureUrl = getPureURL(window.location.href);
-	const shouldRestoreCont = restoreContActive.includes(pureUrl);
-	const curModeName = pureUrl in fullWebsites ? fullWebsites[pureUrl] : curAutoMode;
+	let curModeName = curAutoMode;
 
-	startMode({ curModeName, statsEnabled, shouldRestoreCont, staticSubMode });
-};
+	if (pureUrl in fullWebsites)
+		curModeName = fullWebsites[pureUrl];
 
-initMode();
+	const letter = letters[curModeName];
 
-const changeMode = async (request, sender, sendResponse) => {
-	const oldMode = appState.curMode;
-	const curModeName = request.activeMode;
-	// check stats and restore content
-	const { statsEnabled, restoreContActive, staticSubMode } = await getStorageData([
-		"statsEnabled",
-		"restoreContActive",
-		"staticSubMode"
-	]);
-	const pureUrl = getPureURL(window.location.href);
-	const shouldRestoreCont = restoreContActive.includes(pureUrl);
+	setBadgeText(letter)(tabID);
 
-	domObserver = disconnectObservers(domObserver);
+	if (ctxEnabled) {
+		Object.keys(subMenuStore).forEach(key => {
+			const menu = subMenuStore[key];
 
-	startMode({ curModeName, statsEnabled, shouldRestoreCont, staticSubMode });
-	modeChangedToBg();
-
-	if (curModeName === "whitelist") {
-		if (shouldRestoreCont) {
-			const newContActive = restoreContActive.filter(url => url !== pureUrl);
-			chrome.storage.sync.set({ restoreContActive: newContActive });
-		}
-
-		sendResponse({ closePopup: true });
-		// window.location.reload()
-	} else if (oldMode === "staticActive" && (curModeName === "easyModeActive" || curModeName === "hardModeActive")) {
-		sendResponse({ closePopup: true });
-	} else {
-		sendResponse({ closePopup: false });
+			try {
+				chrome.contextMenus.update(menu, {
+					type: "checkbox",
+					checked:
+						letter === "A" && key === "hardModeActive" ||
+						letter === "D" && key === "staticActive" ||
+						letter === "M" && key === "easyModeActive" ||
+						letter === "" && key === "whitelist"
+				});
+			} catch (e) {
+				console.log("Couldn't update context menu");
+				console.log(e);
+			}
+		});
 	}
 };
 
-// "change mode" listener from popup.js and bg.js
+// handle mode changed from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-	// check if script is inside the iframe
-	if (window !== window.parent) return true;
+	if (!sender.tab) return true;
 
-	changeMode(request, sender, sendResponse);
+	if (request.modeChanged) {
+		const tabID = sender.tab.id;
+		const pureUrl = getPureURL(sender);
+
+		setNewBadge(pureUrl, tabID);
+	} else if (request.openOptPage) {
+		chrome.runtime.openOptionsPage();
+	} else if (request.ctxEnabled === true) {
+		addCtxMenu();
+	} else if (request.ctxEnabled === false) {
+		chrome.contextMenus.removeAll();
+	}
 
 	return true;
 });
 
-// shortcut (keycomb: "Alt + x") from browser listener
-const keyDownCallBack = async e => {
-	const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+// handle updating to set new badge and context menu
+chrome.tabs.onUpdated.addListener((tabID, changeInfo, tab) => {
+	if (changeInfo.status === "loading") {
+		const url = tab.url;
 
-	if (
-		(e.altKey && e.which == 88) ||
-		(isMac && e.metaKey && e.shiftKey && e.which == 88)
-	) {
-		// needed shortcut pressed
-		e.preventDefault();
-
-		const { statsEnabled, restoreContActive, shortCutMode, staticSubMode } = await getStorageData([
-			"statsEnabled",
-			"restoreContActive",
-			"shortCutMode",
-			"staticSubMode",
-		]);
-		const websites = await getWebsites();
-		const fullWebsites = { ...defWebsites, ...websites };
-
-		if (appState.curMode === shortCutMode || shortCutMode === null) return;
-
-		const pureUrl = getPureURL(window.location.href);
-		const shouldRestoreCont = restoreContActive.includes(pureUrl);
-
-		const curModeName = shortCutMode;
-		domObserver = disconnectObservers(domObserver);
-
-		if (pureUrl in fullWebsites && fullWebsites[pureUrl] === curModeName) return;
-
-		const newWebsites = { ...websites, [pureUrl]: curModeName };
-
-		startMode({ curModeName, statsEnabled, shouldRestoreCont, staticSubMode });
-		try {
-			await setWebsites(newWebsites);
-			modeChangedToBg();
-			createNotification(appState.curMode);
-		} catch (e) {
-			console.log(e);
+		if (url.includes("chrome://") || url.includes("chrome-extension://")) {
+			setBadgeText(null)(tabID);
+			chrome.action.disable(tabID);
+		} else {
+			const pureUrl = getPureURL({ url });
+			setNewBadge(pureUrl, tabID);
 		}
-
-		// if (curModeName === 'whitelist')
-		// 	window.location.reload()
 	}
-};
-document.onkeydown = debounce(keyDownCallBack, 100);
-
-// open option page programmatically from websites
-document.addEventListener("openOptPage", e => {
-	chrome.runtime.sendMessage({ openOptPage: true });
 });
 
-// send stats to website
-const sendStats = async () => {
-	const { stats } = await getStorageData("stats");
-	document.dispatchEvent(new CustomEvent("PopUpOFFStats", { detail: stats }));
+// content menu (right click) mechanics
+const subMenu = [
+	{
+		title: `Aggressive`,
+		mode: "hardModeActive",
+	},
+	{
+		title: `Moderate`,
+		mode: "easyModeActive",
+	},
+	{
+		title: `Delicate`,
+		mode: "staticActive",
+	},
+	{
+		title: `Turn OFF`,
+		mode: "whitelist",
+	},
+];
+
+const subMenuStore = {
+	hardModeActive: null,
+	easyModeActive: null,
+	staticActive: null,
+	whitelist: null,
 };
 
-if (`${window.location.origin}${window.location.pathname}` === "https://popupoff.org/visualization") {
-	document.addEventListener("showPopUpOFFStats", ({ detail }) => {
-		if (detail === "letTheShowBegin") {
-			sendStats();
-			setInterval(sendStats, 2000);
-		}
-	});
+const setNewMode = async (newMode, pureUrl, tabID) => {
+	const websites = await getWebsites();
+
+	const fullWebsites = { ...defWebsites, ...websites };
+
+	if (pureUrl in fullWebsites && fullWebsites[pureUrl] === newMode) return;
+
+	const newWebsites = { ...websites, [pureUrl]: newMode };
+	const letter = letters[newMode];
+
+	try {
+		await setWebsites(newWebsites);
+		setBadgeText(letter)(tabID);
+	} catch (e) {
+		console.log("Couldn't update badge");
+		console.log(e);
+	}
+};
+
+const addCtxMenu = () => {
+	try {
+		chrome.contextMenus.removeAll(() => {
+			subMenu.map((item, index) => {
+				subMenuStore[Object.keys(subMenuStore)[index]] = chrome.contextMenus.create({
+					id: item.mode,
+					title: item.title,
+					type: "checkbox",
+					// checked whitelist by default
+					checked: item.mode === "whitelist",
+					// works for web pages only
+					documentUrlPatterns: ["http://*/*", "https://*/*", "http://*/", "https://*/"],
+				});
+			});
+		});
+
+		chrome.contextMenus.onClicked.addListener((info, tab) => {
+			const tabID = tab.id;
+			const tabURL = tab.url;
+			const pureUrl = getPureURL({ url: tabURL });
+
+			chrome.tabs.sendMessage(tabID, { activeMode: info.menuItemId }, resp => {
+				// if (resp && resp.closePopup === true) {
+				// 	chrome.tabs.update(tabID, { url: tabURL })
+				// }
+			});
+
+			setNewMode(info.menuItemId, pureUrl, tabID);
+		});
+	} catch (e) {
+		console.log("Couldn't create context menu");
+		console.log(e);
+	}
 }
 
-// notification mechanics
-let notifTimeout;
-const textItems = {
-	whitelist: "Turn OFF",
-	hardModeActive: "Aggressive",
-	staticActive: "Delicate",
-	easyModeActive: "Moderate",
-};
+const initCtxMenu = async () => {
+	chrome.contextMenus.removeAll();
+	const { ctxEnabled } = await getStorageData("ctxEnabled");
 
-const createNotification = curMode => {
-	const notification = document.createElement("span");
-	notification.setAttribute("data-popupoff", "notification");
-	const text = document.createTextNode(`✔ ${textItems[curMode]} mode activated`);
-	notification.className = "PopUpOFF_notification";
-	notification.appendChild(text);
-	document.body.appendChild(notification);
+	if (ctxEnabled) {
+		addCtxMenu();
+	}
+}
 
-	clearTimeout(notifTimeout);
-	notifTimeout = setTimeout(() => {
-		if (document.querySelector(".PopUpOFF_notification"))
-			document.querySelector('[data-popupoff="notification"]').remove();
-	}, 5000);
-};
+initCtxMenu();
