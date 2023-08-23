@@ -1,3 +1,24 @@
+const config = {
+    "ctxEnabled": true,
+    "update": false,
+    "stats": {
+        "cleanedArea": 0,
+        "numbOfItems": 0,
+        "restored": 0
+    },
+    "statsEnabled": true,
+    "restoreContActive": [],
+    "curAutoMode": "whitelist",
+    "staticSubMode": "relative",
+    "shortCutMode": null,
+	"curMode": "easyModeActive",
+    "websites1": {},
+    "websites2": {},
+    "websites3": {}
+};
+
+
+
 // DOM searching
 const querySelector = selector => document.querySelector(selector);
 const querySelectorAll = selector => document.querySelectorAll(selector);
@@ -92,23 +113,25 @@ const splitIntoChunks = obj => {
 	};
 };
 
-const getStorageData = key =>
-	new Promise((resolve, reject) =>
-		chrome.storage.sync.get(key, result =>
-			chrome.runtime.lastError
-				? reject(Error(chrome.runtime.lastError.message))
-				: resolve(result)
-		)
-	);
+const getStorageData = (...keys) => {
+	return new Promise((resolve, reject) => {
+		let data = {};
 
-const setStorageData = data =>
-	new Promise((resolve, reject) =>
-		chrome.storage.sync.set(data, () =>
-			chrome.runtime.lastError
-				? reject(Error(chrome.runtime.lastError.message))
-				: resolve()
-		)
-	);
+		keys.forEach(key => {
+			data = { ...data, [key]: config[key] };
+		});
+
+		return resolve(data);
+	});
+}
+
+const setStorageData = data =>{
+	// Configuration of PopUpOFF-Headless is read-only. See the `config` object above 
+
+	return new Promise((resolve, reject) => {
+		return resolve();
+	});
+}
 
 const setWebsites = async obj => {
 	const { obj1, obj2, obj3 } = obj
