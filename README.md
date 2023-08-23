@@ -47,7 +47,7 @@ const page = await browser.newPage()
 
 ## Configure
 
-You can configure the level of strictness of the popup blocking algorithm by changing the `curAutoMode` and `curMode` properties in 'config.js' to one of the following values:
+You can configure the level of strictness of the popup blocking algorithm by changing the `curAutoMode` and `curMode` properties in ['config.js'](https://github.com/martinshaw/PopUpOFF-headless/blob/develop/config.js) to one of the following values:
 
 * whitelist
 * easyModeActive
