@@ -1,5 +1,5 @@
 {
-	"name": "PopUpOFF - Popup and overlay blocker",
+	"name": "PopUpOFF Headless",
 	"short_name": "PopUpOFF",
 	"version": "2.1.3",
 	"description": "Removes and prevents popups, overlays and cookie notifications, other tools do not. Enjoy the original look of the internet.",
@@ -24,7 +24,7 @@
 	},
 	"action": {
 		"default_popup": "popup/popup.html",
-		"default_title": "PopUpOFF - Click to open",
+		"default_title": "PopUpOFF Headless",
 		"default_icon": {
 			"16": "images/logo16.png",
 			"32": "images/logo32.png",
