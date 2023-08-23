@@ -10,7 +10,7 @@ If you enjoy my fork and have found a valuable use for it, please consider donat
 
 I would like to keep the semantic versioning of this fork in sync with the original extension package, but I have no way of knowing when the original author will release a new version.
 
-For now, while the package number is <1.0.0, *this package is not ready for stable production use and should be considered experimental*.
+For now, *this package is not ready for stable production use and should be considered experimental*.
 
 ## Installation
 
