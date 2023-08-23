@@ -45,6 +45,17 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage()
 ```
 
+## Configure
+
+You can configure the level of strictness of the popup blocking algorithm by changing the `curAutoMode` and `curMode` properties in 'config.js' to one of the following values:
+
+* whitelist
+* easyModeActive
+* staticActive
+* hardModeActive
+
+See the [PopUpOFF](http://popupoff.org) website for more information about these modes.
+
 # Original README file 
 
 - Download for:
